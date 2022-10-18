@@ -1,4 +1,9 @@
-from http import server
+'''
+Automates email processing for Outlook accounts.
+Modify the subject
+
+Author: Fahad Zaheer
+'''
 import imaplib
 import smtplib
 import email
@@ -12,75 +17,68 @@ password = getpass.getpass("Enter password for this email: ")
 # use your email provider's IMAP server, you can look for your provider's IMAP server on Google
 # or check this page: https://www.systoolsgroup.com/imap/
 # for office 365, it's this:
-imap_server = "outlook.office365.com"
-smtp_server = "smtp-mail.outlook.com"
+IMAPSERVER = "outlook.office365.com"
+SMTPSERVER = "smtp-mail.outlook.com"
 
+# create an IMAP4 class with SSL
+imap = imaplib.IMAP4_SSL(IMAPSERVER)
 
-# create an IMAP4 class with SSL 
-imap = imaplib.IMAP4_SSL(imap_server)
 # authenticate
 imap.login(username, password)
-
-
-smtp = smtplib.SMTP(smtp_server, 587)
+smtp = smtplib.SMTP(SMTPSERVER, 587)
 smtp.starttls()
 smtp.login(username, password)
-
-
-
-
 data_dic = {}
-with open("config.ini", "r") as f:
-        lines = f.readlines()
-        for data in lines:
-            data = data.strip()
-            key_vals = data.split(":")
-            data_dic[key_vals[0]] = key_vals[1]
 
-
+with open("config.ini", "r", encoding="utf-8") as f:
+    lines = f.readlines()
+    for data in lines:
+        data = data.strip()
+        key_vals = data.split(":")
+        data_dic[key_vals[0]] = key_vals[1]
 
 reference_numbers = []
-references_exist = False
+REFERENCES_EXIST = False
+
 try:
-    with open("reference_numbers.txt", "r") as f:
+    with open("reference_numbers.txt", "r", encoding="utf-8") as f:
         reference_numbers = f.readlines()
         reference_numbers = reference_numbers[-1]
         print(reference_numbers)
-        references_exist = True
+        REFERENCES_EXIST = True
 except FileNotFoundError:
     pass
 
 
 prefixes = []
 try:
-    with open("prefixes.txt", "r") as f:
+    with open("prefixes.txt", "r", encoding="utf-8") as f:
         prefixes = f.readlines()
 except FileNotFoundError:
     pass
 
 
 
-first = True
-difference = 0
-top_msg = 0
-is_reply = False
+FIRST = True
+DIFFERENCE = 0
+TOP_MSG = 0
+ISREPLY = False
 while True:
     status, messages = imap.select("INBOX")
-    top_msg+= difference
-    difference = 0
+    TOP_MSG+= DIFFERENCE
+    DIFFERENCE = 0
     # number of top emails to fetch
     messages = int(messages[0])
-    for i in range(messages, top_msg, -1):
+    for i in range(messages, TOP_MSG, -1):
         print("Currently id of the last message is: " + str(i))
-        if first:
-            top_msg = i
-            first = False
+        if FIRST:
+            TOP_MSG = i
+            FIRST = False
             break
-        
-        if i == top_msg:
+        if i == TOP_MSG:
             break
 
-        if references_exist:
+        if REFERENCES_EXIST:
             n= int(data_dic["Number_of_Digits"])-len(str(int(reference_numbers) + 1))
             reference_numbers = "0" * n +str(int(reference_numbers) + 1)
             refernece_string = "[REF-" + data_dic["PREFIX"] + "-" + reference_numbers + "]"
@@ -94,29 +92,25 @@ while True:
         res, msg = imap.fetch(str(i), "(RFC822)")
         for response in msg:
             if isinstance(response, tuple):
-                    
                 # parse a bytes email into a message object
                 msg = email.message_from_bytes(response[1])
                 # decode the email subject
                 subject, encoding = decode_header(msg["Subject"])[0]
                 if "REF" in subject:
-                    is_reply = True
+                    ISREPLY = True
                     break
                 msg.replace_header("From", username)
                 msg.replace_header("Subject", refernece_string+subject)
-                
                 for mail_address in to_mail:
                     msg.replace_header("To", mail_address.strip())
                     smtp.sendmail(username, mail_address, msg.as_string())
-        
-
-        if is_reply:
-            is_reply = False
+        if ISREPLY:
+            ISREPLY = False
             break
-        difference+=1
-        with open("reference_numbers.txt", "a") as f:
+        DIFFERENCE+=1
+        with open("reference_numbers.txt", "a", encoding="utf-8") as f:
             f.write(str(reference_numbers) + "\n")
-        with open("prefixes.txt", "a") as f:
+        with open("prefixes.txt", "a", encoding="utf-8") as f:
             f.write(data_dic["PREFIX"] + ", ")
 
 smtp.quit()
